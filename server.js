@@ -35,49 +35,74 @@ let urlStatus = 0;
 app.post('/api/shorturl/new', async (req, res) => {
   
   let checkUrl = req.body.url.replace(/^https?:\/\//, '');
-  let that = this;
-  dns.lookup(checkUrl, async (err) => {
-    if(err){
-      res.json({ error: 'invalid url' });
-      return;
-    }
-    else{
-      let url = {
-        original_url: req.body.url
+  // if(dns.lookup(checkUrl, async (err) => {
+  //   if(err){
+  //     return "error";
+  //   }
+  // }) === "error"){
+  //   console.log(req.body.url);
+  //   res.json({ error: 'invalid url' }).end();
+  //   return;
+  // }
+
+  var regex = /^https?:\/\//; //need this format for res.redirect
+  
+  if (regex.test(req.body.url)) {
+    var tempDnsUrl = req.body.url.slice(req.body.url.indexOf("//") + 2); //need to remove http(s):// to pass to dns.lookup
+    var slashIndex = tempDnsUrl.indexOf("/"); //need to remove anythng past .com, etc., for dns.lookup
+    var dnsUrl = slashIndex < 0 ? tempDnsUrl : tempDnsUrl.slice(0, slashIndex); 
+    console.log("slashIndex: " + slashIndex);
+    console.log("dnsUrl: " + dnsUrl);
+    dns.lookup(dnsUrl, function(err, address, family) {  //check for valid url
+      if (err) { 
+        console.log(err); 
+        res.send("invalid url");
       }
-      let db_url = await Url.findOne(url);
-      console.log(db_url);
-      if(db_url){
-        res.json({
-          original_url: db_url.original_url,
-          short_url: db_url.short_url
-        });
-        return;
-      }
-      urlStatus = urlStatus + 1;
-      url['short_url'] = urlStatus;
-      console.log(url);
-      let save_url = new Url(url); 
-      db_url = await save_url.save();
-      console.log(db_url);
-      res.json({
-        original_url: db_url.original_url,
-        short_url: db_url.short_url
-      });
-      return ;
-    }
-  })
+      else if (address !== undefined) {
+        console.log("address: " + address);
+        // findOriginalUrl(req.body.url); //check to see if url exists in database
+      } 
+    });  //dns.lookup
+    } else {
+    res.send("invalid URL format");
+    return ;
+  }
+
+
+  let url = {
+    original_url: req.body.url
+  }
+  let db_url = await Url.findOne(url);
+  console.log(db_url);
+  if(db_url){
+    res.json({
+      original_url: db_url.original_url,
+      short_url: db_url.short_url
+    }).end();
+    return;
+  }
+  urlStatus = urlStatus + 1;
+  url['short_url'] = urlStatus;
+  console.log(url);
+  let save_url = new Url(url); 
+  db_url = await save_url.save();
+  console.log(db_url);
+  res.json({
+    original_url: db_url.original_url,
+    short_url: db_url.short_url
+  }).end();
+  return ;
 });
 
 app.get('/api/shorturl/:id', async (req, res) => {
-  let temp = {short_url: +req.params.id};
+  let temp = {short_url: req.params.id};
   console.log(temp);
   try{
     let db_url = await Url.findOne(temp);
     if(db_url){
-      let url = db_url.original_url.replace(/^https?:\/\//, '');
-      url = 'https://'+url;
-      res.redirect(302, url);
+      // let url = db_url.original_url.replace(/^https?:\/\//, '');
+      // url = 'https://'+url;
+      res.redirect(302, db_url.original_url);
     }
     else{
       res.json({ error: 'no short json' });
@@ -86,7 +111,6 @@ app.get('/api/shorturl/:id', async (req, res) => {
   catch(err){
     res.json({ error: 'no short json' });
   }
-  
 })
 
   
